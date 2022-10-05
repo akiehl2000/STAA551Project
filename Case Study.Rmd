@@ -1,0 +1,129 @@
+---
+title: "Case Study"
+author: "Adam Kiehl"
+date: "2022-10-04"
+output: pdf_document
+---
+
+```{r setup, include=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(rstanarm)
+library(GGally)
+library(scales)
+library(ggthemes)
+```
+
+# Data Exploration
+
+### Import Data
+
+```{r}
+data_raw <- read.csv('ToyotaCorollaData.csv')
+
+data <- data_raw %>%
+  mutate_at(c('Metallic', 'Automatic', 'Doors', 'Cylinders', 'Gears', 
+              'Guarantee', 'BOVAG'),
+            as.factor)
+
+head(data)
+```
+
+### Summarize Data
+
+```{r}
+summary(data)
+```
+
+### Plot Outcome Variable
+
+```{r}
+ggplot(data,
+       mapping = aes(x = Price)) +
+  geom_histogram(binwidth = 1000) +
+  theme_tufte(base_family = 'sans') +
+  scale_x_continuous(labels = label_dollar(prefix = '$')) +
+  scale_y_continuous(breaks = seq(0, 100, by = 25)) +
+  labs(title = 'Distribution of Used Toyota Corolla Sales Prices',
+       x = 'Sales Price',
+       y = 'Count')
+```
+
+### Age-Related Predictors
+
+`Mfg_Year`, `Age`, and `KM` are all potentially predictors of interest, but all may be highly correlated. 
+```{r, message=FALSE}
+data %>%
+  select(c(Price, Mfg_Month, Mfg_Year, Age, KM)) %>%
+  ggpairs(progress = FALSE)
+```
+
+### Aesthetic Predictors
+
+`Price` appears to be approximately identically distributed across all levels of aesthetic predictors. These predictors may not be of interest for further analysis. 
+```{r, message=FALSE}
+data %>%
+  select(c(Price, Metallic, Doors)) %>%
+  ggpairs(progress = FALSE)
+```
+
+### Performance-Based Predictors
+
+`Weight`, `HP`, and `Fuel_Type` all appear to be interesting performance-based predictors. Additionally, `CC`, with one outlier removed, also shows promise as a predictor. 
+```{r, message=FALSE}
+data %>%
+  select(c(Price, Fuel_Type, HP, Automatic, CC, Cylinders, Gears, Weight)) %>%
+  ggpairs(progress = FALSE)
+```
+
+# Cost-Based Predictors
+
+Of the cost-based predictors, only `Guarantee` and `Period` appear to be possibly interesting predictors, but the relationship pictured below is not strong. 
+```{r, message=FALSE}
+data %>%
+  select(c(Price, QuartTax, Guarantee, BOVAG, Period)) %>%
+  ggpairs(progress = FALSE)
+```
+
+### Preliminary Model Fit
+
+```{r}
+fit_stan <- stan_glm(Price ~ Age + KM + HP + Weight + Fuel_Type + Guarantee,
+                     data = data, refresh = 0, iter = 1000)
+print(fit_stan, digits = 3, detail = FALSE)
+```
+
+### Model Assumptions
+
+```{r}
+n <- length(fit_stan$residuals)
+quants <- qnorm((1:n / n))
+
+ggplot(mapping = aes(x = quants, 
+                     y = sort(scale(fit_stan$residuals)))) +
+  geom_point(alpha = .5) +
+  geom_abline(intercept = 0,
+              slope = 1,
+              col = 'red',
+              size = .2) +
+  labs(title = 'QQ-Norm Plot',
+       x = 'Theoretical Quantiles',
+       y = 'Sorted Residuals')
+
+ggplot(mapping = aes(x = fit_stan$fitted.values,
+                     y = fit_stan$residuals)) +
+  geom_point(alpha = .5) +
+  geom_hline(yintercept = 0,
+             col = 'red',
+             size = .2) +
+  labs(title = 'Residuals vs Fitted Values Plot',
+       x = 'Fitted Values',
+       y = 'Residuals')
+```
+### Model Assessment
+
+```{r, warning=FALSE}
+print(paste('R^2:', round(mean(bayes_R2(fit_stan)), 3)))
+print(paste('LOO R^2:', round(mean(loo_R2(fit_stan)), 3)))
+```
+
