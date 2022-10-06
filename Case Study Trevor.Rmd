@@ -1,0 +1,29 @@
+---
+title: "Case Study Trevor"
+author: "Trevor Isaacson"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(rstanarm)
+library(GGally)
+library(scales)
+library(ggthemes)
+```
+
+# Data Exploration
+
+### Import Data
+```{r}
+data_raw <- read.csv('ToyotaCorollaData.csv')
+
+data <- data_raw %>%
+  mutate_at(c('Metallic', 'Automatic', 'Doors', 'Cylinders', 'Gears', 
+              'Guarantee', 'BOVAG'),
+            as.factor)
+
+head(data)
+```
