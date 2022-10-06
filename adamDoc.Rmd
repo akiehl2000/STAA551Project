@@ -1,0 +1,350 @@
+---
+title: "Adam Work"
+author: "Adam Kiehl"
+date: "2022-10-05"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(rstanarm)
+library(GGally)
+library(ggthemes)
+library(scales)
+library(bayesplot)
+```
+
+### Import Data
+
+```{r}
+data_raw <- read.csv('ToyotaCorollaData.csv')
+
+data <- data_raw %>%
+  mutate_at(c('Metallic', 'Automatic', 'Doors', 'Cylinders', 'Gears', 
+              'Guarantee', 'BOVAG', 'Fuel_Type', 'Mfg_Month', 'Mfg_Year'),
+            as.factor)
+
+head(data)
+```
+
+Scale data and log transform `Price`.
+```{r}
+data_scale <- cbind(log(data$Price),
+                    (data %>% 
+                       select(-Price) %>%
+                       mutate_if(is.numeric, scale))) %>%
+  as.data.frame()
+names(data_scale) <- names(data)
+```
+
+# Exploratory Data Analysis
+
+```{r}
+ggplot(data,
+       mapping = aes(x = Price)) +
+  geom_histogram(binwidth = 1000) +
+  theme_tufte(base_family = 'sans') +
+  scale_x_continuous(labels = label_dollar(prefix = '$')) +
+  scale_y_continuous(breaks = seq(0, 100, by = 25)) +
+  labs(title = 'Distribution of Used Toyota Corolla Sales Prices',
+       x = 'Sales Price',
+       y = 'Count')
+```
+
+```{r, message=FALSE}
+data %>%
+  select(c(Price, Age, KM, Weight, HP, Fuel_Type, Period)) %>%
+  ggpairs(progress = FALSE)
+```
+
+# Model Fitting
+
+Fit full model, un-transformed, and with default priors. 
+```{r, warning=FALSE}
+fit1 <- stan_glm(Price ~ .,
+                 data = (data %>%
+                           select(-Cylinders)),
+                 refresh = 0,
+                 iter = 5000)
+
+print(fit1, 
+      digits = 3,
+      detail = FALSE)
+
+print(paste('R^2: ', round(mean(bayes_R2(fit1)), 3)))
+print(paste('LOO R^2: ', round(mean(loo_R2(fit1)), 3)))
+
+n <- length(fit1$residuals)
+quants <- qnorm((1:n / n))
+
+ggplot(mapping = aes(x = quants, 
+                     y = sort(scale(fit1$residuals)))) +
+  geom_point(alpha = .5) +
+  geom_abline(intercept = 0,
+              slope = 1,
+              col = 'red',
+              size = .2) +
+  labs(title = 'QQ-Norm Plot',
+       x = 'Theoretical Quantiles',
+       y = 'Sorted Residuals')
+
+ggplot(mapping = aes(x = fit1$fitted.values,
+                     y = fit1$residuals)) +
+  geom_point(alpha = .5) +
+  geom_hline(yintercept = 0,
+             col = 'red',
+             size = .2) +
+  labs(title = 'Residuals vs Fitted Values Plot',
+       x = 'Fitted Values',
+       y = 'Residuals')
+```
+
+Fit selective model, un-transformed, and with default priors.
+```{r, warning=FALSE}
+fit2 <- stan_glm(Price ~ Age + KM + Weight + HP + Fuel_Type + Period,
+                 data = data,
+                 refresh = 0,
+                 iter = 5000)
+
+print(fit2,
+      digits = 3,
+      detail = FALSE)
+
+print(paste('R^2: ', round(mean(bayes_R2(fit2)), 3)))
+print(paste('LOO R^2: ', round(mean(loo_R2(fit2)), 3)))
+
+n <- length(fit2$residuals)
+quants <- qnorm((1:n / n))
+
+ggplot(mapping = aes(x = quants, 
+                     y = sort(scale(fit2$residuals)))) +
+  geom_point(alpha = .5) +
+  geom_abline(intercept = 0,
+              slope = 1,
+              col = 'red',
+              size = .2) +
+  labs(title = 'QQ-Norm Plot',
+       x = 'Theoretical Quantiles',
+       y = 'Sorted Residuals')
+
+ggplot(mapping = aes(x = fit2$fitted.values,
+                     y = fit2$residuals)) +
+  geom_point(alpha = .5) +
+  geom_hline(yintercept = 0,
+             col = 'red',
+             size = .2) +
+  labs(title = 'Residuals vs Fitted Values Plot',
+       x = 'Fitted Values',
+       y = 'Residuals')
+```
+
+Fit full transformed model with default priors. 
+```{r, warning=FALSE}
+fit3 <- stan_glm(Price ~ .,
+                 data = (data_scale %>%
+                           select(-Cylinders)),
+                 refresh = 0,
+                 iter = 5000)
+
+print(fit3,
+      digits = 3,
+      detail = FALSE)
+
+print(paste('R^2: ', round(mean(bayes_R2(fit3)), 3)))
+print(paste('LOO R^2: ', round(mean(loo_R2(fit3)), 3)))
+
+n <- length(fit3$residuals)
+quants <- qnorm((1:n / n))
+
+ggplot(mapping = aes(x = quants, 
+                     y = sort(scale(fit3$residuals)))) +
+  geom_point(alpha = .5) +
+  geom_abline(intercept = 0,
+              slope = 1,
+              col = 'red',
+              size = .2) +
+  labs(title = 'QQ-Norm Plot',
+       x = 'Theoretical Quantiles',
+       y = 'Sorted Residuals')
+
+ggplot(mapping = aes(x = fit3$fitted.values,
+                     y = fit3$residuals)) +
+  geom_point(alpha = .5) +
+  geom_hline(yintercept = 0,
+             col = 'red',
+             size = .2) +
+  labs(title = 'Residuals vs Fitted Values Plot',
+       x = 'Fitted Values',
+       y = 'Residuals')
+```
+
+Fit full transformed model with regularized horseshoe prior.
+```{r, warning=FALSE}
+p <- ncol(data) - 1
+n <- nrow(data)
+
+p0 <- 6
+
+slab_scale <- sqrt(0.3 / p0) * sd(data_scale$Price)
+global_scale <- (p0 / (p - p0)) / sqrt(n)
+
+fit4 <- stan_glm(Price ~ .,
+                 data = (data_scale %>%
+                           select(-Cylinders)),
+                 refresh = 0,
+                 iter = 5000,
+                 prior = hs(global_scale = global_scale,
+                            slab_scale = slab_scale))
+
+print(fit4, 
+      digits = 3,
+      detail = FALSE)
+
+print(paste('R^2: ', round(mean(bayes_R2(fit4)), 3)))
+print(paste('LOO R^2: ', round(mean(loo_R2(fit4)), 3)))
+
+n <- length(fit4$residuals)
+quants <- qnorm((1:n / n))
+
+ggplot(mapping = aes(x = quants, 
+                     y = sort(scale(fit4$residuals)))) +
+  geom_point(alpha = .5) +
+  geom_abline(intercept = 0,
+              slope = 1,
+              col = 'red',
+              size = .2) +
+  labs(title = 'QQ-Norm Plot',
+       x = 'Theoretical Quantiles',
+       y = 'Sorted Residuals')
+
+ggplot(mapping = aes(x = fit4$fitted.values,
+                     y = fit4$residuals)) +
+  geom_point(alpha = .5) +
+  geom_hline(yintercept = 0,
+             col = 'red',
+             size = .2) +
+  labs(title = 'Residuals vs Fitted Values Plot',
+       x = 'Fitted Values',
+       y = 'Residuals')
+
+as.data.frame(fit4) %>%
+  select(-c('(Intercept)', 'sigma')) %>%
+  mcmc_intervals()
+```
+
+Fit horseshoe-selected transformed model with default priors.
+```{r, warning=FALSE}
+fit5 <- stan_glm(Price ~ Age + Mfg_Month + Mfg_Year + KM + Fuel_Type + HP + 
+                   Metallic + QuartTax + Weight + Guarantee + Period,
+                 data = data_scale,
+                 refresh = 0,
+                 iter = 5000)
+
+print(fit5,
+      digits = 3,
+      detail = FALSE)
+
+print(paste('R^2: ', round(mean(bayes_R2(fit5)), 3)))
+print(paste('LOO R^2: ', round(mean(loo_R2(fit5)), 3)))
+
+n <- length(fit5$residuals)
+quants <- qnorm((1:n / n))
+
+ggplot(mapping = aes(x = quants, 
+                     y = sort(scale(fit5$residuals)))) +
+  geom_point(alpha = .5) +
+  geom_abline(intercept = 0,
+              slope = 1,
+              col = 'red',
+              size = .2) +
+  labs(title = 'QQ-Norm Plot',
+       x = 'Theoretical Quantiles',
+       y = 'Sorted Residuals')
+
+ggplot(mapping = aes(x = fit5$fitted.values,
+                     y = fit5$residuals)) +
+  geom_point(alpha = .5) +
+  geom_hline(yintercept = 0,
+             col = 'red',
+             size = .2) +
+  labs(title = 'Residuals vs Fitted Values Plot',
+       x = 'Fitted Values',
+       y = 'Residuals')
+```
+
+Fit horseshoe-selected (minus months and years) transformed model with default priors.
+```{r, warning=FALSE}
+fit6 <- stan_glm(Price ~ Age + KM + Fuel_Type + HP + Metallic + QuartTax + 
+                   Weight + Guarantee + Period,
+                 data = data_scale,
+                 refresh = 0,
+                 iter = 5000)
+
+print(fit6,
+      digits = 3,
+      detail = FALSE)
+
+print(paste('R^2: ', round(mean(bayes_R2(fit6)), 3)))
+print(paste('LOO R^2: ', round(mean(loo_R2(fit6)), 3)))
+
+n <- length(fit6$residuals)
+quants <- qnorm((1:n / n))
+
+ggplot(mapping = aes(x = quants, 
+                     y = sort(scale(fit6$residuals)))) +
+  geom_point(alpha = .5) +
+  geom_abline(intercept = 0,
+              slope = 1,
+              col = 'red',
+              size = .2) +
+  labs(title = 'QQ-Norm Plot',
+       x = 'Theoretical Quantiles',
+       y = 'Sorted Residuals')
+
+ggplot(mapping = aes(x = fit6$fitted.values,
+                     y = fit6$residuals)) +
+  geom_point(alpha = .5) +
+  geom_hline(yintercept = 0,
+             col = 'red',
+             size = .2) +
+  labs(title = 'Residuals vs Fitted Values Plot',
+       x = 'Fitted Values',
+       y = 'Residuals')
+```
+
+
+
+
+
+
+
+
+
+- Age: N(-100, 50)
+- KM N(-.0625, .5)
+- Weight N(10, 5)
+- HP N(50, 20)
+- Fuel Type
+- Period
+
+```{r, warning=FALSE}
+loo1 <- loo(fit1)
+loo2 <- loo(fit2)
+loo3 <- loo(fit3)
+loo4 <- loo(fit4)
+loo5 <- loo(fit5)
+loo6 <- loo(fit6)
+
+loo_compare(loo1, loo2, loo3, loo4, loo5, loo6)
+```
+
+
+
+
+
+
+
+
+
+
