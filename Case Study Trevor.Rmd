@@ -9,9 +9,16 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(rstanarm)
+library("rstantools")
 library(GGally)
 library(scales)
 library(ggthemes)
+library("loo")
+library("ggplot2")
+library("bayesplot")
+theme_set(bayesplot::theme_default(base_family = "sans"))
+set.seed(551)
+SEED = 551
 ```
 
 # Data Exploration
@@ -21,9 +28,110 @@ library(ggthemes)
 data_raw <- read.csv('ToyotaCorollaData.csv')
 
 data <- data_raw %>%
-  mutate_at(c('Metallic', 'Automatic', 'Doors', 'Cylinders', 'Gears', 
-              'Guarantee', 'BOVAG'),
-            as.factor)
-
+   mutate_at(c('Metallic', 'Automatic', 'Doors', 'Cylinders', 'Gears', 
+              'Guarantee', 'BOVAG', "Fuel_Type"),
+            as.factor) %>%
+  # cyclinders has one factor, remove mfg_month and mfg_year as basically same as age
+  select(-c(Cylinders, Mfg_Month, Mfg_Year)) %>%
+  drop_na()
 head(data)
+
+cont_predictors = c("Age", "KM", "HP", "CC", 
+                    "QuartTax", "Weight", "Period")
+
+str(data)
 ```
+
+## Default Linear Model    
+This figure shows the predictors without standardization 
+```{r}
+fit0 <- stan_glm(Price ~ ., data = data, refresh=0)
+```
+
+```{r}
+p0 <- mcmc_areas(fit0, pars=vars(-'(Intercept)',-sigma),
+                 prob_outer=0.95, area_method = "scaled height")
+p0
+```
+
+## Standardize continuous predictors 
+Makes for easy comparison of relevances
+```{r}
+dataStd = data
+dataStd[, cont_predictors] = scale(data[ , cont_predictors])
+dataStd
+```
+
+## Default Weak Prior on Coefficients
+Fit a regression model with default weak priors
+```{r}
+fit1 = stan_glm(Price ~ ., data = dataStd, refresh = 0, seed = SEED)
+```
+
+Plot posterior marginals of coefficients
+```{r}
+p1 <- mcmc_areas(fit1, pars=vars(-'(Intercept)', -sigma),
+                 prob_outer=0.95, area_method = "scaled height")
+p1
+```
+This figure shows that after all predictors have been standardized to have equal standard deviation, the uncertainties on the relevances are similar.  We can see a many predictors have high relevance based on their distance from 0.  
+
+## Horseshoe prior
+```{r}
+p0 = 6
+p = ncol(dataStd)
+n = nrow(dataStd)
+
+slab_scale = sd(dataStd$Price)/sqrt(p0)*sqrt(0.3)
+global_scale = (p0 / (p - p0))/sqrt(n)
+fit2 = stan_glm(Price ~ ., data = dataStd, refresh = 0,
+                prior = hs(global_scale = global_scale, 
+                           slab_scale = slab_scale))
+```
+
+Plot posterior marginals of coefficients
+```{r}
+p2 <- mcmc_areas(fit2, pars=vars(-'(Intercept)', -sigma),
+                 prob_outer=0.95, area_method = "scaled height")
+p2
+```
+
+This figure shows that the regularized horseshoe prior shrinks the posterior for many regression coefficients towards 0, showing the more relevant predictors.  
+
+## Compare R^2
+```{r}
+round(median(bayes_R2(fit0)), 3)
+round(median(loo_R2(fit0)), 3)
+
+round(median(bayes_R2(fit1)), 3)
+round(median(loo_R2(fit1)), 3)
+
+round(median(bayes_R2(fit2)), 3)
+round(median(loo_R2(fit2)), 3)
+```
+
+## Bayesian R^2 Distribution
+```{r}
+ggplot() + geom_histogram(aes(x=bayes_R2(fit2), breaks = 25)) +
+  xlim(c(0.80,0.925)) +
+  scale_y_continuous() +
+  labs(x="Bayesian R^2", y="")
+```
+
+## Compare Models
+```{r}
+loo0 = loo(fit0, k_threshold = 0.7)
+loo1 = loo(fit1, k_threshold = 0.7)
+loo2 = loo(fit2, k_threshold = 0.7)
+loo_compare(loo0 ,loo1, loo2)
+```
+
+# Subset of Covariates
+```{r}
+
+```
+
+
+
+
+
