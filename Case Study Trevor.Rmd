@@ -127,9 +127,31 @@ loo_compare(loo0 ,loo1, loo2)
 ```
 
 # Subset of Covariates
-```{r}
 
+## Default Priors
+```{r}
+fit_subset1_default = stan_glm(Price ~ Age + KM + Fuel_Type + HP + QuartTax + Weight 
+                       + Guarantee + BOVAG + Period, 
+                       data = dataStd, 
+                       refresh = 0)
 ```
+
+```{r warning = FALSE}
+print(paste("In Sample Bayesian R^2: ",round(median(bayes_R2(fit_subset1_default)), 3)))
+print(paste("CV LOO R^2: ", round(median(loo_R2(fit_subset1_default)), 3)))
+
+loo_subset1 = loo(fit_subset1_default)
+```
+
+```{r}
+ps1 <- mcmc_areas(fit_subset1_default, pars=vars(-'(Intercept)', -sigma),
+                 prob_outer=0.95, area_method = "scaled height")
+ps1
+```
+
+
+
+## We
 
 
 
