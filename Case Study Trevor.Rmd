@@ -33,8 +33,7 @@ data <- data_raw %>%
             as.factor) %>%
   # cyclinders has one factor, remove mfg_month and mfg_year as basically same as age
   select(-c(Cylinders, Mfg_Month, Mfg_Year)) %>%
-  drop_na() %>%
-  mutate(Price = log(Price))
+  drop_na()
 head(data)
 
 cont_predictors = c("Age", "KM", "HP", "CC", 
@@ -174,7 +173,7 @@ fit_subset2_default = stan_glm(Price ~ Age + KM + HP + Weight +
 ```
 
 ```{r}
-fit_subset2_default
+print(fit_subset2_default, 4)
 
 res = resid(fit_subset2_default)
 plot(x = fitted(fit_subset2_default), y = res, main = "Residuals vs Fitted Values", 
@@ -194,7 +193,7 @@ fit_subset3_default = stan_glm(Price ~ Age + KM + HP + Weight +
 ```
 
 ```{r}
-fit_subset3_default
+print(fit_subset3_default, 4)
 
 res = resid(fit_subset3_default)
 plot(x = fitted(fit_subset3_default), y = res, main = "Residuals vs Fitted Values", 
@@ -214,7 +213,7 @@ fit_subset4_default = stan_glm(Price ~ Age + KM + HP + Weight +
 ```
 
 ```{r}
-fit_subset4_default
+print(fit_subset4_default, 4)
 
 res = resid(fit_subset4_default)
 plot(x = fitted(fit_subset4_default), y = res, main = "Residuals vs Fitted Values", 
@@ -235,7 +234,7 @@ fit_subset5_default = stan_glm(Price ~ Age + KM + HP + Weight +
 ```
 
 ```{r}
-fit_subset5_default
+print(fit_subset5_default, 4)
 
 res = resid(fit_subset5_default)
 plot(x = fitted(fit_subset5_default), y = res, main = "Residuals vs Fitted Values", 
@@ -244,9 +243,7 @@ abline(0, 0)
 ```
 
 
-
-
-```{r}
+```{r warning = FALSE}
 loo_1 = loo(fit_subset1_default)
 loo_2 = loo(fit_subset2_default)
 loo_3 = loo(fit_subset3_default)
@@ -254,6 +251,25 @@ loo_4 = loo(fit_subset4_default)
 loo_5 = loo(fit_subset5_default)
 loo_compare(loo_1, loo_2, loo_3, loo_4, loo_5)
 ```
+
+```{r warning = FALSE}
+r2values = data.frame(fit = c(1,2,3,4,5), 
+                      bayesian = c(round(median(bayes_R2(fit_subset1_default)), 3),
+                                  round(median(bayes_R2(fit_subset2_default)), 3),
+                                  round(median(bayes_R2(fit_subset3_default)), 3),
+                                  round(median(bayes_R2(fit_subset4_default)), 3),
+                                  round(median(bayes_R2(fit_subset5_default)), 3)), 
+                      LOO_CV = c(round(median(loo_R2(fit_subset1_default)), 3),
+                                 round(median(loo_R2(fit_subset2_default)), 3),
+                                 round(median(loo_R2(fit_subset3_default)), 3),
+                                 round(median(loo_R2(fit_subset4_default)), 3),
+                                 round(median(loo_R2(fit_subset5_default)), 3)))
+
+r2values
+```
+
+
+
 
 
 
