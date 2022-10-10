@@ -33,7 +33,8 @@ data <- data_raw %>%
             as.factor) %>%
   # cyclinders has one factor, remove mfg_month and mfg_year as basically same as age
   select(-c(Cylinders, Mfg_Month, Mfg_Year)) %>%
-  drop_na()
+  drop_na() %>%
+  mutate(Price = log(Price))
 head(data)
 
 cont_predictors = c("Age", "KM", "HP", "CC", 
@@ -41,6 +42,12 @@ cont_predictors = c("Age", "KM", "HP", "CC",
 
 str(data)
 ```
+## Check Log Price
+```{r}
+ggplot(data = data, mapping = aes(x = log(Price))) +
+  geom_histogram()
+```
+
 
 ## Default Linear Model    
 This figure shows the predictors without standardization 
@@ -147,12 +154,106 @@ loo_subset1 = loo(fit_subset1_default)
 ps1 <- mcmc_areas(fit_subset1_default, pars=vars(-'(Intercept)', -sigma),
                  prob_outer=0.95, area_method = "scaled height")
 ps1
+
+res = resid(fit_subset1_default)
+plot(x = fitted(fit_subset1_default), y = res, main = "Residuals vs Fitted Values", 
+     xlab = "Fitted Values", ylab = "Residuals")
+abline(0, 0)
+```
+
+
+## Interaction w/ HP + Weight
+More HP, bigger engine/more weight?
+```{r}
+fit_subset2_default = stan_glm(Price ~ Age + KM + HP + Weight + 
+                          QuartTax + Fuel_Type + Guarantee + BOVAG + Period +
+                          HP:Weight, 
+                       data = dataStd, 
+                       refresh = 0,
+                       )
+```
+
+```{r}
+fit_subset2_default
+
+res = resid(fit_subset2_default)
+plot(x = fitted(fit_subset2_default), y = res, main = "Residuals vs Fitted Values", 
+     xlab = "Fitted Values", ylab = "Residuals")
+abline(0, 0)
+```
+
+## Interaction w/ BOVAG + Guarantee
+
+```{r}
+fit_subset3_default = stan_glm(Price ~ Age + KM + HP + Weight + 
+                          QuartTax + Fuel_Type + Guarantee + BOVAG + Period +
+                          BOVAG:Guarantee, 
+                       data = dataStd, 
+                       refresh = 0,
+                       )
+```
+
+```{r}
+fit_subset3_default
+
+res = resid(fit_subset3_default)
+plot(x = fitted(fit_subset3_default), y = res, main = "Residuals vs Fitted Values", 
+     xlab = "Fitted Values", ylab = "Residuals")
+abline(0, 0)
+```
+
+## Interaction w/ Age + KM
+
+```{r}
+fit_subset4_default = stan_glm(Price ~ Age + KM + HP + Weight + 
+                          QuartTax + Fuel_Type + Guarantee + BOVAG + Period +
+                          Age:KM, 
+                       data = dataStd, 
+                       refresh = 0,
+                       )
+```
+
+```{r}
+fit_subset4_default
+
+res = resid(fit_subset4_default)
+plot(x = fitted(fit_subset4_default), y = res, main = "Residuals vs Fitted Values", 
+     xlab = "Fitted Values", ylab = "Residuals")
+abline(0, 0)
+```
+
+
+## Interaction w/ Age + KM and HP + Weight
+
+```{r}
+fit_subset5_default = stan_glm(Price ~ Age + KM + HP + Weight + 
+                          QuartTax + Fuel_Type + Guarantee + BOVAG + Period +
+                          Age:KM + HP:Weight, 
+                       data = dataStd, 
+                       refresh = 0,
+                       )
+```
+
+```{r}
+fit_subset5_default
+
+res = resid(fit_subset5_default)
+plot(x = fitted(fit_subset5_default), y = res, main = "Residuals vs Fitted Values", 
+     xlab = "Fitted Values", ylab = "Residuals")
+abline(0, 0)
 ```
 
 
 
-## We
 
+```{r}
+loo_1 = loo(fit_subset1_default)
+loo_2 = loo(fit_subset2_default)
+loo_3 = loo(fit_subset3_default)
+loo_4 = loo(fit_subset4_default)
+loo_5 = loo(fit_subset5_default)
+loo_compare(loo_1, loo_2, loo_3, loo_4, loo_5)
+```
 
 
 
