@@ -269,6 +269,16 @@ r2values
 ```
 
 
+```{r}
+folds = kfold_split_random(K = 10, N = n)
+kcv_1 = kfold(fit_subset1_default, folds = folds)
+kcv_2 = kfold(fit_subset2_default, folds = folds)
+kcv_3 = kfold(fit_subset3_default, folds = folds)
+kcv_4 = kfold(fit_subset4_default, folds = folds)
+kcv_5 = kfold(fit_subset5_default, folds = folds)
+loo_compare(kcv_1, kcv_2, kcv_3, kcv_4, kcv_5)
+
+```
 
 
 
