@@ -313,20 +313,50 @@ ggplot(mapping = aes(x = fit6$fitted.values,
        y = 'Residuals')
 ```
 
+Fit selective model, un-transformed, and with weakly informative priors.
+```{r, warning=FALSE}
+prior_means <- c(-100, -.0625, 10, 50)
+prior_vars <- c(2500, .25, 25, 400)
+
+fit7 <- stan_glm(Price ~ Age + KM + Weight + HP,
+                 data = data,
+                 refresh = 0,
+                 iter = 5000,
+                 prior = normal(prior_means, prior_vars))
+
+print(fit7,
+      digits = 3,
+      detail = FALSE)
+
+print(paste('R^2: ', round(mean(bayes_R2(fit7)), 3)))
+print(paste('LOO R^2: ', round(mean(loo_R2(fit7)), 3)))
+
+n <- length(fit6$residuals)
+quants <- qnorm((1:n / n))
+
+ggplot(mapping = aes(x = quants, 
+                     y = sort(scale(fit6$residuals)))) +
+  geom_point(alpha = .5) +
+  geom_abline(intercept = 0,
+              slope = 1,
+              col = 'red',
+              size = .2) +
+  labs(title = 'QQ-Norm Plot',
+       x = 'Theoretical Quantiles',
+       y = 'Sorted Residuals')
+
+ggplot(mapping = aes(x = fit6$fitted.values,
+                     y = fit6$residuals)) +
+  geom_point(alpha = .5) +
+  geom_hline(yintercept = 0,
+             col = 'red',
+             size = .2) +
+  labs(title = 'Residuals vs Fitted Values Plot',
+       x = 'Fitted Values',
+       y = 'Residuals')
+```
 
 
-
-
-
-
-
-
-- Age: N(-100, 50)
-- KM N(-.0625, .5)
-- Weight N(10, 5)
-- HP N(50, 20)
-- Fuel Type
-- Period
 
 ```{r, warning=FALSE}
 loo1 <- loo(fit1)
@@ -335,8 +365,9 @@ loo3 <- loo(fit3)
 loo4 <- loo(fit4)
 loo5 <- loo(fit5)
 loo6 <- loo(fit6)
+loo7 <- loo(fit7)
 
-loo_compare(loo1, loo2, loo3, loo4, loo5, loo6)
+loo_compare(loo1, loo2, loo3, loo4, loo5, loo6, loo7)
 ```
 
 
