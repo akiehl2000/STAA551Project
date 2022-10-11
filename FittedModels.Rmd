@@ -1,0 +1,293 @@
+---
+title: "Fitted Models"
+author: "Adam Kiehl"
+date: "2022-10-11"
+output: pdf_document
+---
+
+```{r setup, include=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(rstanarm)
+library(GGally)
+library(ggthemes)
+library(scales)
+library(bayesplot)
+```
+
+```{r}
+set.seed(551)
+```
+
+## Import Data
+
+```{r}
+# read data from .csv file
+data_raw <- read.csv('ToyotaCorollaData.csv')
+
+data <- data_raw %>%
+  # factor categorical predictors
+  mutate_at(c('Metallic', 'Automatic', 'Doors', 'Cylinders', 'Gears', 
+              'Guarantee', 'BOVAG', 'Fuel_Type', 'Mfg_Month', 'Mfg_Year'),
+            as.factor) %>%
+  # remove singular predictor
+  select(-Cylinders)
+
+head(data)
+```
+
+Scale data and log transform `Price`.
+```{r}
+# log transform Price and scale predictors
+data_scale <- cbind(log(data$Price),
+                    (data %>% 
+                       select(-Price) %>%
+                       mutate_if(is.numeric, scale))) %>%
+  as.data.frame()
+names(data_scale) <- names(data)
+```
+
+## Diagnostic Function
+
+```{r}
+resultsDF <- data.frame(model = 1:10,
+                        predictors = rep(NA, 10),
+                        R2 = rep(NA, 10),
+                        LOO_R2 = rep(NA, 10),
+                        LOO_CV = rep(NA, 10))
+
+# function to assess model and display examination results
+diagFit <- function(fit, modelNum, results, printPlots) {
+  # print model fit
+  print(fit, 
+        digits = 3,
+        detail = FALSE)
+  
+  # extract number of predictors
+  p <- length(fit$coefficients) - 1
+  results$predictors[which(results$model == modelNum)] <- p
+  
+  # print model R^2 scores
+  bayesR2 <- round(mean(bayes_R2(fit)), 3)
+  results$R2[which(results$model == modelNum)] <- bayesR2
+  print(paste('R^2: ', bayesR2))
+  looR2 <- round(mean(loo_R2(fit)), 3)
+  results$LOO_R2[which(results$model == modelNum)] <- looR2
+  print(paste('LOO R^2: ', looR2))
+  
+  # print mode LOO CV score
+  looFit <- loo(fit, k_threshold = 0.7)
+  elpd <- round(looFit$estimates[1, 1], 2)
+  # correction for log transformation of response
+  if (elpd < 0) {
+    looFit$pointwise[, 1] <- looFit$pointwise[, 1] + data_scale$Price
+    elpd <- round(sum(looFit$pointwise[, 1]), 2)
+  }
+  results$LOO_CV[which(results$model == modelNum)] <- elpd
+  print(paste('LOO ELPD: ', elpd))
+  
+  # generate QQ-Norm plot
+  n <- length(fit$residuals)
+  quants <- qnorm((1:n / n))
+  
+  plt_QQ <- ggplot(mapping = aes(x = quants, 
+                                 y = sort(scale(fit$residuals)))) +
+    geom_point(alpha = .5) +
+    geom_abline(intercept = 0,
+                slope = 1,
+                col = 'red',
+                size = .2) +
+    labs(title = 'QQ-Norm Plot',
+         x = 'Theoretical Quantiles',
+         y = 'Sorted Residuals')
+  
+  # generate residuals vs fitted values plot
+  plt_res_fit <- ggplot(mapping = aes(x = fit$fitted.values,
+                                      y = fit$residuals)) +
+    geom_point(alpha = .5) +
+    geom_hline(yintercept = 0,
+               col = 'red',
+               size = .2) +
+    labs(title = 'Residuals vs Fitted Values Plot',
+         x = 'Fitted Values',
+         y = 'Residuals')
+  
+  # print plots if desired
+  if (printPlots) {
+    print(plt_QQ)
+    print(plt_res_fit)
+  }
+  
+  return(results)
+}
+
+# Bayesian simulation size
+N <- 5000
+
+# print model diagnostic plots?
+printPlots <- FALSE
+```
+
+## Model 1: Full, Unscaled, Default Priors
+
+```{r, warning=FALSE, message=FALSE}
+fit1 <- stan_glm(Price ~ .,
+                 data = data,
+                 refresh = 0,
+                 iter = N)
+
+resultsDF <- diagFit(fit1, 1, resultsDF, printPlots)
+```
+
+## Model 2: Full, Scaled, Default Priors
+
+```{r, warning=FALSE, message=FALSE}
+fit2 <- stan_glm(Price ~ .,
+                 data = data_scale,
+                 refresh = 0,
+                 iter = N)
+
+resultsDF <- diagFit(fit2, 2, resultsDF, printPlots)
+```
+
+## Model 3: Full, Scaled, Horseshoe Prior
+
+```{r, warning=FALSE, message=FALSE}
+p <- ncol(data) - 1
+n <- nrow(data)
+
+p0 <- 6
+
+slab_scale <- sqrt(0.3 / p0) * sd(data_scale$Price)
+global_scale <- (p0 / (p - p0)) / sqrt(n)
+
+fit3 <- stan_glm(Price ~ .,
+                 data = data_scale,
+                 refresh = 0,
+                 iter = N,
+                 prior = hs(global_scale = global_scale,
+                            slab_scale = slab_scale))
+
+resultsDF <- diagFit(fit3, 3, resultsDF, printPlots)
+
+as.data.frame(fit3) %>%
+  select(-c('(Intercept)', 'sigma')) %>%
+  mcmc_intervals()
+```
+
+## Model 4: Horseshoe-Selected, Scaled, Default Priors
+
+```{r, warning=FALSE, message=FALSE}
+fit4 <- stan_glm(Price ~ Age + Mfg_Month + Mfg_Year + KM + Fuel_Type + HP + 
+                   Metallic + QuartTax + Weight + Guarantee + Period,
+                 data = data_scale,
+                 refresh = 0,
+                 iter = N)
+
+resultsDF <- diagFit(fit4, 4, resultsDF, printPlots)
+```
+
+## Model 5: Full, Scaled, LASSO Prior
+
+```{r, warning=FALSE, message=FALSE}
+fit5 <- stan_glm(Price ~ .,
+                 data = data_scale,
+                 refresh = 0,
+                 iter = N,
+                 prior = lasso())
+
+resultsDF <- diagFit(fit5, 5, resultsDF, printPlots)
+
+as.data.frame(fit5) %>%
+  select(-c('(Intercept)', 'sigma')) %>%
+  mcmc_intervals()
+```
+
+## Model 6: LASSO-Selected, Scaled, Default Priors
+
+```{r, warning=FALSE, message=FALSE}
+fit6 <- stan_glm(Price ~ Age + Mfg_Month + KM + Fuel_Type + HP + QuartTax + 
+                   Weight + Guarantee + BOVAG + Period,
+                 data = data_scale,
+                 refresh = 0,
+                 iter = N)
+
+resultsDF <- diagFit(fit6, 6, resultsDF, printPlots)
+```
+
+## Model 7: Selective, Scaled, Default Priors
+
+```{r, warning=FALSE, message=FALSE}
+fit7 <- stan_glm(Price ~ Age + KM + Fuel_Type + HP + QuartTax + Weight + 
+                   Guarantee + BOVAG + Period,
+                 data = data_scale,
+                 refresh = 0,
+                 iter = N)
+
+resultsDF <- diagFit(fit7, 7, resultsDF, printPlots)
+```
+
+## Model 8: Selective, Unscaled, Weakly Informative Priors
+
+```{r, warning=FALSE, message=FALSE}
+priorMeans <- c(-100, -.0625, 1000, -1000, 50, 100, 10, 1000, 0, 1000)
+priorVars <- c(625, .125, 62500, 62500, 100, 625, .125, 62500, 100, 62500)
+
+fit8 <- stan_glm(Price ~ Age + KM + Fuel_Type + HP + QuartTax + Weight +
+                   Guarantee + BOVAG + Period,
+                 data = data,
+                 refresh = 0,
+                 iter = N,
+                 prior = normal(priorMeans,
+                                priorVars))
+
+resultsDF <- diagFit(fit8, 8, resultsDF, printPlots)
+```
+
+## Model 9: Selective with 1 Interaction, Scaled, Default Priors
+
+```{r, warning=FALSE, message=FALSE}
+fit9 <- stan_glm(Price ~ Fuel_Type + HP + QuartTax + Weight + 
+                   Guarantee + BOVAG + Period + Age*KM,
+                 data = data_scale,
+                 refresh = 0,
+                 iter = N)
+
+resultsDF <- diagFit(fit9, 9, resultsDF, printPlots)
+```
+
+## Model 10: Selective with 2 Interactions, Scaled, Default Priors
+
+```{r, warning=FALSE, message=FALSE}
+fit10 <- stan_glm(Price ~ Fuel_Type + HP + QuartTax + Weight + 
+                    Guarantee + BOVAG + Period + Age*KM + Weight*HP,
+                  data = data_scale,
+                  refresh = 0,
+                  iter = N)
+
+resultsDF <- diagFit(fit10, 10, resultsDF, printPlots)
+```
+
+## Results
+
+```{r, warning=FALSE, message=FALSE}
+resultsDF
+```
+
+```{r, message=FALSE, warning=FALSE}
+loo1 <- loo(fit1, k_threshold = 0.7)
+loo2 <- loo(fit2, k_threshold = 0.7)
+loo3 <- loo(fit3, k_threshold = 0.7)
+loo4 <- loo(fit4, k_threshold = 0.7)
+loo5 <- loo(fit5, k_threshold = 0.7)
+loo6 <- loo(fit6, k_threshold = 0.7)
+loo7 <- loo(fit7, k_threshold = 0.7)
+loo8 <- loo(fit8, k_threshold = 0.7)
+loo9 <- loo(fit9, k_threshold = 0.7)
+loo10 <- loo(fit10, k_threshold = 0.7)
+
+loo1$pointwise[, 1] <- loo1$pointwise[, 1] + data_scale$Price
+loo8$pointwise[, 1] <- loo8$pointwise[, 1] + data_scale$Price
+
+loo_compare(loo1, loo2, loo3, loo4, loo5, loo6, loo7, loo8, loo9, loo10)
+```
