@@ -1,7 +1,7 @@
 ---
-title: "STAA 551 Case Study"
+title: "Toyota Case Study"
 author: "Trevor Isaacson, Runze Jiang, Adam Kiehl"
-date: "2022-10-11"
+date: "2022-10-12"
 output: pdf_document
 ---
 
