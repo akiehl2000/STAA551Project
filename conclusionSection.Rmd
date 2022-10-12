@@ -5,12 +5,7 @@ date: "`r Sys.Date()`"
 output: pdf_document
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-```
-
 ```{r setup, include=FALSE, message=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
 knitr::opts_chunk$set(warning = FALSE)
 library(tidyverse)
 library(rstanarm)
@@ -19,14 +14,14 @@ library(ggthemes)
 library(scales)
 library(bayesplot)
 library(loo)
-library(ggplot2f)
+library(ggplot2)
 ```
 
 ```{r}
 set.seed(551)
 ```
 
-```{r}
+```{r echo = FALSE}
 # read data from .csv file
 data_raw <- read.csv('ToyotaCorollaData.csv')
 
@@ -42,7 +37,7 @@ head(data)
 ```
 
 Scale data and log transform `Price`.
-```{r}
+```{r echo = FALSE}
 # log transform Price and scale predictors
 data_scale <- cbind(log(data$Price),
                     (data %>% 
@@ -52,95 +47,12 @@ data_scale <- cbind(log(data$Price),
 names(data_scale) <- names(data)
 ```
 
-## Diagnostic Function
-
-```{r}
-resultsDF <- data.frame(model = 1:10,
-                        predictors = rep(NA, 10),
-                        R2 = rep(NA, 10),
-                        LOO_R2 = rep(NA, 10),
-                        LOO_CV = rep(NA, 10))
-
-# function to assess model and display examination results
-diagFit <- function(fit, modelNum, results, printPlots) {
-  # print model fit
-  print(fit, 
-        digits = 3,
-        detail = FALSE)
-  
-  # extract number of predictors
-  p <- length(fit$coefficients) - 1
-  results$predictors[which(results$model == modelNum)] <- p
-  
-  # print model R^2 scores
-  bayesR2 <- round(mean(bayes_R2(fit)), 3)
-  results$R2[which(results$model == modelNum)] <- bayesR2
-  print(paste('R^2: ', bayesR2))
-  looR2 <- round(mean(loo_R2(fit)), 3)
-  results$LOO_R2[which(results$model == modelNum)] <- looR2
-  print(paste('LOO R^2: ', looR2))
-  
-  # print mode LOO CV score
-  looFit <- loo(fit, k_threshold = 0.7)
-  elpd <- round(looFit$estimates[1, 1], 2)
-  # correction for log transformation of response
-  if (elpd < 0) {
-    looFit$pointwise[, 1] <- looFit$pointwise[, 1] + data_scale$Price
-    elpd <- round(sum(looFit$pointwise[, 1]), 2)
-  }
-  results$LOO_CV[which(results$model == modelNum)] <- elpd
-  print(paste('LOO ELPD: ', elpd))
-  
-  # generate QQ-Norm plot
-  n <- length(fit$residuals)
-  quants <- qnorm((1:n / n))
-  
-  plt_QQ <- ggplot(mapping = aes(x = quants, 
-                                 y = sort(scale(fit$residuals)))) +
-    geom_point(alpha = .5) +
-    geom_abline(intercept = 0,
-                slope = 1,
-                col = 'red',
-                size = .2) +
-    labs(title = 'QQ-Norm Plot',
-         x = 'Theoretical Quantiles',
-         y = 'Sorted Residuals')
-  
-  # generate residuals vs fitted values plot
-  plt_res_fit <- ggplot(mapping = aes(x = fit$fitted.values,
-                                      y = fit$residuals)) +
-    geom_point(alpha = .5) +
-    geom_hline(yintercept = 0,
-               col = 'red',
-               size = .2) +
-    labs(title = 'Residuals vs Fitted Values Plot',
-         x = 'Fitted Values',
-         y = 'Residuals')
-  
-  # print plots if desired
-  if (printPlots) {
-    print(plt_QQ)
-    print(plt_res_fit)
-  }
-  
-  return(results)
-}
-
-# Bayesian simulation size
-N <- 1000
-
-# print model diagnostic plots?
-printPlots <- TRUE
-```
-
 ```{r, warning=FALSE, message=FALSE}
 fit4 <- stan_glm(Price ~ Age + Mfg_Month + Mfg_Year + KM + Fuel_Type + HP + 
                    Metallic + QuartTax + Weight + Guarantee + BOVAG + Period,
                  data = data_scale,
                  refresh = 0,
-                 iter = N)
-
-resultsDF <- diagFit(fit4, 4, resultsDF, printPlots)
+                 iter = 5000)
 ```
 
 
@@ -151,12 +63,12 @@ For our final model, we decided to use model $4$.  This model is constructed usi
 
 ## Tables of Estimated Coefficients/Standard Errors
 ```{r}
-
-
-
+print(fit4, digits = 3)
 ```
 
 
+## Interpretation and Discussion
+The intercept coefficient can be interpreted as the expected log(price) of a non-metallic, CNG-fueled car that was manufactured in January of 1999 with no manufacturer or BOVAG guarantee and a value of $0$ for all numeric predictors included in the model.  The coefficients estimates for the numeric predictors can be interpreted as the expected percent difference in predicted car price associated with a one standard deviation increase in the value of the predictor, with all other predictors remaining constant.  Overall, this model had an in-sample Bayesian $R^2$ value of 0.882 and a leave one out adjusted $R^2$ value of 0.87.  This confirms our model isn't overfitting while also showing a relatively high $R^2$ value.  
 
 ## Predictive Plots
 The final fitted model should look like our data.  By drawing from the predictive distribution and comparing it to the distribution of the response variable, we can determine if our model is fitting appropriately.  In the plot below, we see our predictive distribution tracks the response distribution well increasing our confidence in the model.  
@@ -199,13 +111,12 @@ plt_QQ
 Because the goal of this study is prediction, our final model has great observed predictive powers using leave one out cross validation and also k-fold cross validation.  Using 
 
 
-
-## Interpretation and Discussion
-
-
+```{r}
+# Put smaller table cv results here
+```
 
 
 
 ## Refer back to the purpose of the study
-The purpose of this study was to predict the selling price of used Toyota Corollas and ensure a small profit based on their new purchase and trade-in promotion.  Based on several variables, we were able to fit this model to help the dealership closely estimate the final selling price for their used cars.  With this model, the dealership can now ensure a reasonable profit by plugging in the characteristics of each individual car into this model and output a predicted selling price.  This will result in more accurate selling prices and higher profits for the dealer.       
+In all, the purpose of this study was to predict the selling price of used Toyota Corollas and ensure a small profit based on their new purchase and trade-in promotion.  Based on several variables, we were able to fit this model to help the dealership closely estimate the final selling price for their used cars.  With this model, the dealership can now ensure a reasonable profit by plugging in the characteristics of each individual car into this model and output a predicted selling price.  This will result in more accurate selling prices and higher profits for the dealer.       
 
