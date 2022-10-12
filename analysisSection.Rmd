@@ -13,31 +13,9 @@ knitr::opts_chunk$set(echo = TRUE)
 
 The relationships between many of the predictors and the response variable of interest, car price, was largely unknown. Aside from a selection of predictors deemed to likely be important based on contextual knowledge, it was not known which predictors should be included in a regression model. Therefore, an array of models were fit using various transformations, variable selection methods, and prior assumptions. All models were fit with the `stan_glm` function in the `rstanarm` package using a Bayesian framework that incorporates prior belief into into traditional regression by use of prior distributions. After fitting, all models were assessed for explanatory power, overfitting, and violations of model assumptions by comparing $R^2$ and $R^2_{LOO}$ and by generating QQ-Normal plots for residuals and residual vs fitted values plots. 
 
-To begin, a full model$^{(1)}$ was fit using the default `stan_glm` priors ($N(0, 6.25)$) to serve as a comparative baseline for future models. The regression intercept was estimated to be $\beta_0 = $ and can be interpreted as the expected price (in dollars) of 3-door, manual, non-metallic, asdjklf fueled car that was pruchased 
+To begin, a full model $(1)$ was fit using the default `stan_glm` priors ($N(0, 6.25)$) to serve as a comparative baseline for future models. The regression intercept was estimated to be $\beta_0 = -4,173.88$ and can be interpreted as the expected price (in dollars) of 3-door, manual, non-metallic, CNG-fueled car that was manufactured in January of 1999 with no manufacturer or BOVAG guarantee and a value of $0$ for all numeric predictors included in the model. The regression coefficients, $\beta_j$, could be interpreted as the expected difference in expected car price associated with a one unit difference in the predictor (or associated with whether or not an observation assumes that specific level of a categorical predictor), with all other predictors remaining constant. These interpretations are unreasonable in a practical context and it makes no sense that the price of a car could be estimated to be a negative value. Therefore, another full model $(2)$ was fit, also using the default `stan_glm` priors, but now with scaled numeric predictors and a log-transformation of car price. This was done to make the interpretation of coefficients more practical and comparable, and to restrict predictions of price to positive values. There may also be potential for modeling benefits from scaling. Then, regression coefficients for numeric predictors could be interpreted as the expected percent difference in expected car price associated with a one standard deviation increase in the value of the predictors, with all other predictors remaining constant. 
 
+The full models fitted utilized $32$ predictors ($16$, not including dummy variables) for modeling. Using a large number of predictors can be damaging to a model due to redundancies in predictor information (multicollinearity) and the potential for overfitting. Several different variable selection methods were applied to the car prices data set to determine which predictors were most closely related with car price. First, a Bayesian variable selection method called a horseshoe prior was used to systematically exclude unimportant predictors from the model. A horseshoe prior places a large amount of prior mass near $0$, forcing predictors to be highly related with the response to be included in the model. This model $(3)$ determined $14$ predictors ($12$, not including dummy variables) to be significant in predicting car price: `Age`, `Mfg_Month`, `Mfg_Year`, `KM`, `Fuel_Type`, `HP`, `Metallic`, `QuartTax`, `Weight`, `Guarantee`, `BOVAG`, and `Period`. A follow-up model $(4)$ was fit using only these selected predictors, with only an inconsequential loss in $R^2$. Next, a model $(5)$ was fit using a variable selection method called LASSO that penalizes a model for producing large coefficient estimates, forcing it to be selective with how it chooses estimates (equivalent to using a Laplace prior). This model determined $15$ predictors ($12$, not including dummy variables) to be significant in predicting car price. These were the same predictors chosen by the horseshoe prior model previously fit. A follow-up model $(6)$ was fit using only these selected predictors, again with only an inconsequential loss in $R^2$ (DO WE NEED THIS MODEL?? ISNT IT THE SAME AS 4??). 
 
-
-- 10 total models were fit
-- Various combinations of transformations, predictors, and priors
-
-- Full model, unscaled, with default priors fit as comparative basis
-  - Mention coefficient interpretations
-- Predictors scaled for interpretation, comparison
-- Price log transformed for strictly positive outcome
-- Scaled full model fit
-  - Mention new coefficient interpretations
-
-- Variable selection performed in several ways
-- Horseshoe prior used to place prior mass around 0
-  - 11 predictors (questionable month and year), metallic
-- LASSO can effectively eliminate predictors
-  - Used lasso prior = laplace prior
-  - 
-- Team-selection predictors based on prior knowledge
-  - Default and weakly informative priors
-  - 2 sets of interactions explored
-
-
-
-
+Thirdly, a more contextual approach was taken to variable selection and predictors were chosen by researchers based on practical knowledge and exploratory data visualizations: `Age`, `KM`, `Fuel_Type`, `HP`, `QuartTax`, `Weight`, `Guarantee`, `BOVAG`, and `Period`. Intuitively, older cars (indicated by `Age` and `KM`) should be worth less and larger and more powerful cars (indicated by `Weight` and `HP`, respectively) should be worth more. It was assumed that cars that take different fuel types (`Fuel_Type`) are likely different kinds of cars and would likely vary in price in some way. Finally, `Guarantee`, `BOVAG`, and `Period` are financial-based incentives that should also intuitively lead to a higher car price. These predictors were selected independently of the results of the horseshoe and LASSO selections, but aligned closely with these selections nonetheless. First, a model $(7)$ was fit using these predictors and the `stan_glm` default priors. A follow-up model $(8)$ was then fit using using weakly informative priors informed by prior knowledge and exploratory data visualizations (ADD A TABLE OF THESE PRIORS!!). This model showed slightly less evidence of overfitting than the previous model but was otherwise similar. Finally, two models $(9)$ & $(10)$ were fit to explore potential interactions of interest. The first of these models included an interaction between `Age` and `KM`, and the second included an interaction between `Weight` and `HP`. 
 
