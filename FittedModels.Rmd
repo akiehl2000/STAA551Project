@@ -179,7 +179,7 @@ as.data.frame(fit3) %>%
 
 ```{r, warning=FALSE, message=FALSE}
 fit4 <- stan_glm(Price ~ Age + Mfg_Month + Mfg_Year + KM + Fuel_Type + HP + 
-                   Metallic + QuartTax + Weight + Guarantee + Period,
+                   Metallic + QuartTax + Weight + Guarantee + BOVAG + Period,
                  data = data_scale,
                  refresh = 0,
                  iter = N)
@@ -206,8 +206,8 @@ as.data.frame(fit5) %>%
 ## Model 6: LASSO-Selected, Scaled, Default Priors
 
 ```{r, warning=FALSE, message=FALSE}
-fit6 <- stan_glm(Price ~ Age + Mfg_Month + KM + Fuel_Type + HP + QuartTax + 
-                   Weight + Guarantee + BOVAG + Period,
+fit6 <- stan_glm(Price ~ Age + Mfg_Month + Mfg_Year + KM + Fuel_Type + HP + 
+                   QuartTax + Weight + Guarantee + BOVAG + Period,
                  data = data_scale,
                  refresh = 0,
                  iter = N)
