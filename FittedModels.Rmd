@@ -207,7 +207,7 @@ as.data.frame(fit5) %>%
 
 ```{r, warning=FALSE, message=FALSE}
 fit6 <- stan_glm(Price ~ Age + Mfg_Month + Mfg_Year + KM + Fuel_Type + HP + 
-                   QuartTax + Weight + Guarantee + BOVAG + Period,
+                   Metallic + QuartTax + Weight + Guarantee + BOVAG + Period,
                  data = data_scale,
                  refresh = 0,
                  iter = N)
