@@ -14,7 +14,11 @@ library(ggthemes)
 library(scales)
 library(knitr)
 library(kableExtra)
+library(bayesplot)
+library(loo)
+library(ggplot2)
 
+set.seed(551)
 options(scipen=999)
 ```
 
@@ -42,14 +46,13 @@ ggplot(data,
   theme_tufte(base_family = 'sans') +
   scale_x_continuous(labels = label_dollar(prefix = '$')) +
   scale_y_continuous(breaks = seq(0, 100, by = 25)) +
-  labs(title = 'Distribution of Used Toyota Corolla Sales Prices (Figure 1)',
+  labs(title = 'Distribution of Used Toyota Corolla Sales Prices',
        x = 'Sales Price',
-       y = 'Count')
+       y = 'Count',
+       subtitle = "Figure 1")
 ```
 
 A Toyota dealership was interested in fitting a regression model to estimate `Price` (Figure 1) using $16$ different predictor variables and a data set of $694$ used Toyota Corolla sales. Numeric predictors included `Age`, `KM` (odometer reading), `HP` (horsepower), `CC` (cylinder volume), `QuartTax` (quarterly road tax), `Weight` and `Period` (guarantee period). Categorical variables included `Mfg_Month` (manufacturing month), `Mfg_Year` (manufacturing year from 1999-2004), `Fuel_type` (CNG, Diesel, or Petrol), `Metallic`, `Automatic`, `Doors` (3, 4, or 5), `Gears` (5 or 6), `Guarantee` (manufacturer's guarantee), and `BOVAG` (BOVAG guarantee). The `Cylinders` predictor was removed from the original data set because all recorded cars had $4$ cylinders, and all categorical predictors were made into factors in `R`. No other cleaning was performed on the data. 
-
-\newpage
 
 A set of practical predictors of interest were chosen based on contextual knowledge and exploratory data visualizations to use for model fitting separately of any formal variable selection techniques. Intuitively, older cars (indicated by `Age` and `KM`) should be worth less and larger and more powerful cars (indicated by `Weight` and `HP`, respectively) should be worth more. It was assumed that cars that take different fuel types (`Fuel_Type`) are likely different kinds of cars and would likely vary in price in some way. Finally, `Guarantee`, `BOVAG`, and `Period` are financial-based incentives that should also intuitively lead to a higher car price. Summary statistics (Table 1) and plots (Figure 2) for these predictors of interest are shown below.
 
@@ -114,4 +117,86 @@ data.frame(Variable = c('Age', 'KM', 'Fuel (Diesel)', 'Fuel (Petrol)', 'HP',
   kable_classic()
 ```
 
-# Results
+
+# Results   
+```{r echo = FALSE}
+# log transform Price and scale predictors
+data_scale <- cbind(log(data$Price),
+                    (data %>% 
+                       select(-Price) %>%
+                       mutate_if(is.numeric, scale))) %>%
+  as.data.frame()
+names(data_scale) <- names(data)
+```
+
+```{r, warning=FALSE, message=FALSE, echo = FALSE}
+# fit final model
+fit4 <- stan_glm(Price ~ Age + Mfg_Month + Mfg_Year + KM + Fuel_Type + HP + 
+                   Metallic + QuartTax + Weight + Guarantee + BOVAG + Period,
+                 data = data_scale,
+                 refresh = 0,
+                 iter = 5000)
+```
+
+For our final model, we decided to use model $4$.  This model is constructed using horse-shoe selected predictors with the scaled data and default priors.  The horseshoe selected predictors include `Age`, `Mfg_Month`, `Mfg_Year`, `KM`, `Fuel_Type`, `HP`, `Metallic`, `QuartTax`, `Weight`, `Guarantee`, `BOVAG`, and `Period`.  Also, using the scaled numeric predictors and a log-transformation of car price to restrict prediction prices to positive values only, this model is able to better predict selling price compared to other models.
+
+```{r warning = FALSE, echo = FALSE}
+print(fit4, digits = 3)
+```
+
+```{r echo = FALSE}
+bayesR2 <- round(mean(bayes_R2(fit4)), 3)
+print(paste('R^2: ', bayesR2))
+looR2 <- round(mean(loo_R2(fit4)), 3)
+print(paste('LOO R^2: ', looR2))
+```
+
+The intercept coefficient can be interpreted as the expected log(price) of a non-metallic, CNG-fueled car that was manufactured in January of 1999 with no manufacturer or BOVAG guarantee and a value of $0$ for all numeric predictors included in the model.  The coefficients estimates for the numeric predictors can be interpreted as the expected percent difference in predicted car price associated with a one standard deviation increase in the value of the predictor, with all other predictors remaining constant.  Overall, this model had an in-sample Bayesian $R^2$ value of $0.882$ and a leave one out adjusted $R^2$ value of $0.87$.  This confirms our model isn't overfitting while also showing a relatively high $R^2$ value.  ADD SOMETHING ABOUT SIGMA!!!        
+
+The final fitted model should look like our data.  By drawing from the predictive distribution and comparing it to the distribution of the response variable, we can determine if our model is fitting appropriately.  In the plot below, we see our predictive distribution tracks the response distribution well increasing our confidence in the model.  
+```{r}
+fit4_rep = posterior_predict(fit4)
+ppc_dens_overlay(data_scale$Price, fit4_rep) + scale_y_continuous(breaks=NULL)
+```
+
+Checking the assumptions of our final model, we find the model includes all the relevant predictors as we chose these using the horseshoe prior and forcing predictors to be highly related with the response.  The outcome measure accurately reflects our prediction interest and is generalized to all Toyota Corollas.  Looking at the residual plots, we see there are no patterns and trends within the residuals vs fitted values plot.  Most values are within $2$ standard residuals of $0$ and the values are spread across the $0$ line.  There might be some clumping but nothing big enough to question the model.  There aren't any heavy tails in the qq-norm plot and the values closely align with the red line.    
+
+```{r fig.show="hold", out.width="50%", echo = FALSE}
+plt_res_fit =ggplot(mapping = aes(x = fit4$fitted.values, y = fit4$residuals)) +
+    geom_point(alpha = .5) +
+    geom_hline(yintercept = 0, col = 'red', size = .2) +
+    geom_hline(yintercept = 2*sigma(fit4), size = 0.1) +
+    geom_hline(yintercept = -2*sigma(fit4), size = 0.1) +
+    labs(title = 'Residuals vs Fitted Values Plot',
+         x = 'Fitted Values',
+         y = 'Residuals')
+
+n <- length(fit4$residuals)
+quants <- qnorm((1:n / n))
+plt_QQ <- ggplot(mapping = aes(x = quants,  y = sort(scale(fit4$residuals)))) +
+  geom_point(alpha = .5) +
+  geom_abline(intercept = 0,
+              slope = 1,
+              col = 'red',
+              size = .2) +
+  labs(title = 'QQ-Norm Plot',
+       x = 'Theoretical Quantiles',
+       y = 'Sorted Residuals')
+
+plt_res_fit
+plt_QQ
+```
+
+## Others results (as appropriate)
+Because the goal of this study is prediction, our final model has great observed predictive powers using leave one out cross validation and also k-fold cross validation.  Using .....
+```{r echo = FALSE}
+# Should we have a table(s) of all the r^2 values and loo_comparisons for each model
+# Maybe explain we this specific model was chosen?
+# Maybe this goes after the coefficients are printed?
+```
+
+In all, the purpose of this study was to predict the selling price of used Toyota Corollas and ensure a small profit based on their new purchase and trade-in promotion.  Based on several variables, we were able to fit this model to help the dealership closely estimate the final selling price for their used cars.  With this model, the dealership can now ensure a reasonable profit by plugging in the characteristics of each individual car into this model and output a predicted selling price.  This will result in more accurate selling prices and higher profits for the dealer.       
+
+
+
+
