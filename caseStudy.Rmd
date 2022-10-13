@@ -17,6 +17,7 @@ library(kableExtra)
 library(bayesplot)
 library(loo)
 library(ggplot2)
+library(gridExtra)
 
 set.seed(551)
 options(scipen=999)
@@ -33,6 +34,131 @@ data <- data_raw %>%
             as.factor) %>%
   # remove singular predictor
   select(-Cylinders)
+
+# log transform Price and scale predictors
+data_scale <- cbind(log(data$Price),
+                    (data %>% 
+                       select(-Price) %>%
+                       mutate_if(is.numeric, scale))) %>%
+  as.data.frame()
+names(data_scale) <- names(data)
+```
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE}
+resultsDF <- data.frame(model = 1:10,
+                        predictors = rep(NA, 10),
+                        R2 = rep(NA, 10),
+                        LOO_R2 = rep(NA, 10),
+                        LOO_CV = rep(NA, 10))
+
+# function to assess model and display examination results
+diagFit <- function(fit, modelNum, results) {
+  # extract number of predictors
+  p <- length(fit$coefficients) - 1
+  results$predictors[which(results$model == modelNum)] <- p
+  
+  # find model R^2 scores
+  bayesR2 <- round(mean(bayes_R2(fit)), 3)
+  results$R2[which(results$model == modelNum)] <- bayesR2
+  looR2 <- round(mean(loo_R2(fit)), 3)
+  results$LOO_R2[which(results$model == modelNum)] <- looR2
+
+  # find model LOO CV score
+  looFit <- loo(fit, k_threshold = 0.7)
+  elpd <- round(looFit$estimates[1, 1], 2)
+  # correction for log transformation of response
+  if (elpd < 0) {
+    looFit$pointwise[, 1] <- looFit$pointwise[, 1] + data_scale$Price
+    elpd <- round(sum(looFit$pointwise[, 1]), 2)
+  }
+  results$LOO_CV[which(results$model == modelNum)] <- elpd
+
+  return(results)
+}
+
+N <- 5000
+
+fit1 <- stan_glm(Price ~ .,
+                 data = data,
+                 refresh = 0,
+                 iter = N)
+resultsDF <- diagFit(fit1, 1, resultsDF)
+
+fit2 <- stan_glm(Price ~ .,
+                 data = data_scale,
+                 refresh = 0,
+                 iter = N)
+resultsDF <- diagFit(fit2, 2, resultsDF)
+
+p <- ncol(data) - 1
+n <- nrow(data)
+
+p0 <- 6
+
+slab_scale <- sqrt(0.3 / p0) * sd(data_scale$Price)
+global_scale <- (p0 / (p - p0)) / sqrt(n)
+
+fit3 <- stan_glm(Price ~ .,
+                 data = data_scale,
+                 refresh = 0,
+                 iter = N,
+                 prior = hs(global_scale = global_scale,
+                            slab_scale = slab_scale))
+resultsDF <- diagFit(fit3, 3, resultsDF)
+
+fit4 <- stan_glm(Price ~ Age + Mfg_Month + Mfg_Year + KM + Fuel_Type + HP + 
+                   Metallic + QuartTax + Weight + Guarantee + BOVAG + Period,
+                 data = data_scale,
+                 refresh = 0,
+                 iter = N)
+resultsDF <- diagFit(fit4, 4, resultsDF)
+
+fit5 <- stan_glm(Price ~ .,
+                 data = data_scale,
+                 refresh = 0,
+                 iter = N,
+                 prior = lasso())
+resultsDF <- diagFit(fit5, 5, resultsDF)
+
+fit6 <- stan_glm(Price ~ Age + Mfg_Month + Mfg_Year + KM + Fuel_Type + HP + 
+                   Metallic + QuartTax + Weight + Guarantee + BOVAG + Period,
+                 data = data_scale,
+                 refresh = 0,
+                 iter = N)
+resultsDF <- diagFit(fit6, 6, resultsDF)
+
+fit7 <- stan_glm(Price ~ Age + KM + Fuel_Type + HP + QuartTax + Weight + 
+                   Guarantee + BOVAG + Period,
+                 data = data_scale,
+                 refresh = 0,
+                 iter = N)
+resultsDF <- diagFit(fit7, 7, resultsDF)
+
+priorMeans <- c(-100, -.0625, 1000, -1000, 50, 100, 10, 1000, 0, 1000)
+priorVars <- c(625, .125, 62500, 62500, 100, 625, .125, 62500, 100, 62500)
+
+fit8 <- stan_glm(Price ~ Age + KM + Fuel_Type + HP + QuartTax + Weight +
+                   Guarantee + BOVAG + Period,
+                 data = data,
+                 refresh = 0,
+                 iter = N,
+                 prior = normal(priorMeans,
+                                priorVars))
+resultsDF <- diagFit(fit8, 8, resultsDF)
+
+fit9 <- stan_glm(Price ~ Fuel_Type + HP + QuartTax + Weight + 
+                   Guarantee + BOVAG + Period + Age*KM,
+                 data = data_scale,
+                 refresh = 0,
+                 iter = N)
+resultsDF <- diagFit(fit9, 9, resultsDF)
+
+fit10 <- stan_glm(Price ~ Fuel_Type + HP + QuartTax + Weight + 
+                    Guarantee + BOVAG + Period + Age*KM + Weight*HP,
+                  data = data_scale,
+                  refresh = 0,
+                  iter = N)
+resultsDF <- diagFit(fit10, 10, resultsDF)
 ```
 
 # Introduction
@@ -40,16 +166,26 @@ data <- data_raw %>%
 Consumers shopping for new cars often have the option to trade in their current car for money towards their new one. Dealerships, in turn, sell the used cars at a slightly higher price. To do this effectively, the dealership must be able to accurately estimate the expected price that it can sell each used car for based only on characteristics of the car. 
 
 ```{r, echo=FALSE}
-ggplot(data,
-       mapping = aes(x = Price)) +
+plt1 <- ggplot(data,
+               mapping = aes(x = Price)) +
   geom_histogram(binwidth = 1000) +
   theme_tufte(base_family = 'sans') +
   scale_x_continuous(labels = label_dollar(prefix = '$')) +
-  scale_y_continuous(breaks = seq(0, 100, by = 25)) +
-  labs(title = 'Distribution of Used Toyota Corolla Sales Prices',
+  scale_y_continuous(breaks = seq(0, 125, by = 25)) +
+  labs(title = 'Used Toyota Corolla Sales Prices (Figure 1)',
        x = 'Sales Price',
-       y = 'Count',
-       subtitle = "Figure 1")
+       y = 'Count')
+
+plt2 <- ggplot(data_scale,
+               mapping = aes(x = Price)) +
+  geom_histogram(binwidth = .1) +
+  theme_tufte(base_family = 'sans') +
+  scale_y_continuous(breaks = seq(0, 125, by = 25)) +
+  labs(title = 'Used Toyota Corolla Log Sales Prices',
+       x = 'Log Sales Price',
+       y = 'Count')
+
+grid.arrange(plt1, plt2)
 ```
 
 A Toyota dealership was interested in fitting a regression model to estimate `Price` (Figure 1) using $16$ different predictor variables and a data set of $694$ used Toyota Corolla sales. Numeric predictors included `Age`, `KM` (odometer reading), `HP` (horsepower), `CC` (cylinder volume), `QuartTax` (quarterly road tax), `Weight` and `Period` (guarantee period). Categorical variables included `Mfg_Month` (manufacturing month), `Mfg_Year` (manufacturing year from 1999-2004), `Fuel_type` (CNG, Diesel, or Petrol), `Metallic`, `Automatic`, `Doors` (3, 4, or 5), `Gears` (5 or 6), `Guarantee` (manufacturer's guarantee), and `BOVAG` (BOVAG guarantee). The `Cylinders` predictor was removed from the original data set because all recorded cars had $4$ cylinders, and all categorical predictors were made into factors in `R`. No other cleaning was performed on the data. 
@@ -119,47 +255,39 @@ data.frame(Variable = c('Age', 'KM', 'Fuel (Diesel)', 'Fuel (Petrol)', 'HP',
 
 
 # Results   
-```{r echo = FALSE}
-# log transform Price and scale predictors
-data_scale <- cbind(log(data$Price),
-                    (data %>% 
-                       select(-Price) %>%
-                       mutate_if(is.numeric, scale))) %>%
-  as.data.frame()
-names(data_scale) <- names(data)
+
+```{r, echo=FALSE}
+resultsDF %>%
+  kbl(col.names = c('Model', 'Predictors', 'R^2', 'LOO R^2', 'LOO ELPD'),
+      align = c('l', rep('r', 4)),
+      caption = 'Model Fitting Results') %>%
+  kable_classic()
 ```
 
-```{r, warning=FALSE, message=FALSE, echo = FALSE}
-# fit final model
-fit4 <- stan_glm(Price ~ Age + Mfg_Month + Mfg_Year + KM + Fuel_Type + HP + 
-                   Metallic + QuartTax + Weight + Guarantee + BOVAG + Period,
-                 data = data_scale,
-                 refresh = 0,
-                 iter = 5000)
-```
-
-For our final model, we decided to use model $4$.  This model is constructed using horse-shoe selected predictors with the scaled data and default priors.  The horseshoe selected predictors include `Age`, `Mfg_Month`, `Mfg_Year`, `KM`, `Fuel_Type`, `HP`, `Metallic`, `QuartTax`, `Weight`, `Guarantee`, `BOVAG`, and `Period`.  Also, using the scaled numeric predictors and a log-transformation of car price to restrict prediction prices to positive values only, this model is able to better predict selling price compared to other models.
+For our final model, we decided to use model $4$ (Table 4).  This model is constructed using horse-shoe selected predictors with the scaled data and default priors.  The horseshoe selected predictors include `Age`, `Mfg_Month`, `Mfg_Year`, `KM`, `Fuel_Type`, `HP`, `Metallic`, `QuartTax`, `Weight`, `Guarantee`, `BOVAG`, and `Period`.  Also, using the scaled numeric predictors and a log-transformation of car price to restrict prediction prices to positive values only, this model is able to better predict selling price compared to other models.
 
 ```{r warning = FALSE, echo = FALSE}
-print(fit4, digits = 3)
-```
-
-```{r echo = FALSE}
-bayesR2 <- round(mean(bayes_R2(fit4)), 3)
-print(paste('R^2: ', bayesR2))
-looR2 <- round(mean(loo_R2(fit4)), 3)
-print(paste('LOO R^2: ', looR2))
+data.frame('Estimate' = round(fit4$coefficients, 3),
+           'Std. Error' = round(fit4$ses, 3)) %>%
+  kbl(col.names = c('Estimate', 'Std. Error'), 
+      align = c('r', 'r'),
+      caption = 'Coefficient Estimates') %>%
+  kable_classic()
 ```
 
 The intercept coefficient can be interpreted as the expected log(price) of a non-metallic, CNG-fueled car that was manufactured in January of 1999 with no manufacturer or BOVAG guarantee and a value of $0$ for all numeric predictors included in the model.  The coefficients estimates for the numeric predictors can be interpreted as the expected percent difference in predicted car price associated with a one standard deviation increase in the value of the predictor, with all other predictors remaining constant.  Overall, this model had an in-sample Bayesian $R^2$ value of $0.882$ and a leave one out adjusted $R^2$ value of $0.87$.  This confirms our model isn't overfitting while also showing a relatively high $R^2$ value.  ADD SOMETHING ABOUT SIGMA!!!        
 
-The final fitted model should look like our data.  By drawing from the predictive distribution and comparing it to the distribution of the response variable, we can determine if our model is fitting appropriately.  In the plot below, we see our predictive distribution tracks the response distribution well increasing our confidence in the model.  
-```{r}
+The final fitted model should look like our data.  By drawing from the predictive distribution and comparing it to the distribution of the response variable (Figure 3), we can determine if our model is fitting appropriately.  In the plot below, we see our predictive distribution tracks the response distribution well increasing our confidence in the model.  
+```{r, echo=FALSE}
 fit4_rep = posterior_predict(fit4)
-ppc_dens_overlay(data_scale$Price, fit4_rep) + scale_y_continuous(breaks=NULL)
+ppc_dens_overlay(data_scale$Price, fit4_rep) + 
+  scale_y_continuous(breaks=NULL) +
+  labs(title = 'Posterior Predictive Distribution (Figure 3)',
+       x = 'log(Price)',
+       y = 'Density')
 ```
 
-Checking the assumptions of our final model, we find the model includes all the relevant predictors as we chose these using the horseshoe prior and forcing predictors to be highly related with the response.  The outcome measure accurately reflects our prediction interest and is generalized to all Toyota Corollas.  Looking at the residual plots, we see there are no patterns and trends within the residuals vs fitted values plot.  Most values are within $2$ standard residuals of $0$ and the values are spread across the $0$ line.  There might be some clumping but nothing big enough to question the model.  There aren't any heavy tails in the qq-norm plot and the values closely align with the red line.    
+Checking the assumptions of our final model, we find the model includes all the relevant predictors as we chose these using the horseshoe prior and forcing predictors to be highly related with the response. The outcome measure accurately reflects our prediction interest and is generalized to all Toyota Corollas.  Looking at the residual vs fitted values plot (Figure 4), we see there are no patterns and trends within the residuals vs fitted values plot.  Most values are within $2$ standard residuals of $0$ and the values are spread across the $0$ line.  There might be some clumping but nothing big enough to question the model.  There aren't any heavy tails in the QQ-norm plot (Figure 5) and the values closely align with the red line.    
 
 ```{r fig.show="hold", out.width="50%", echo = FALSE}
 plt_res_fit =ggplot(mapping = aes(x = fit4$fitted.values, y = fit4$residuals)) +
@@ -167,7 +295,7 @@ plt_res_fit =ggplot(mapping = aes(x = fit4$fitted.values, y = fit4$residuals)) +
     geom_hline(yintercept = 0, col = 'red', size = .2) +
     geom_hline(yintercept = 2*sigma(fit4), size = 0.1) +
     geom_hline(yintercept = -2*sigma(fit4), size = 0.1) +
-    labs(title = 'Residuals vs Fitted Values Plot',
+    labs(title = 'Residuals vs Fitted Values Plot (Figure 4)',
          x = 'Fitted Values',
          y = 'Residuals')
 
@@ -179,7 +307,7 @@ plt_QQ <- ggplot(mapping = aes(x = quants,  y = sort(scale(fit4$residuals)))) +
               slope = 1,
               col = 'red',
               size = .2) +
-  labs(title = 'QQ-Norm Plot',
+  labs(title = 'QQ-Norm Plot (Figure 5)',
        x = 'Theoretical Quantiles',
        y = 'Sorted Residuals')
 
