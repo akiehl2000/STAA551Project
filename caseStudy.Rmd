@@ -300,30 +300,8 @@ l1 = loo_compare(loo1, loo2, loo3, loo4, loo5, loo6, loo7, loo8, loo9, loo10)
 l2 = loo_compare(kcv_3, kcv_4, kcv_5, kcv_6)
 ```
 
-
-```{r echo = FALSE, message = FALSE, warning=FALSE}
-looResults = data.frame("Model" = c(6,5,4,3,2,10,7,9,1,8),
-                        "elpd_diff" = c(0.00, -0.46, -1.26, -2.80, -4.71, 
-                                        -35.19, -36.08, -36.83, -16.87, -85.33),
-                        "se_diff" = c(0.00, 5.43, 0.46, 3.75, 5.81, 13.26, 
-                                      15.86, 15.32, 28.10, 23.22))
-looResults %>%
-  kbl(align = c('r', 'r'),
-      caption = 'LOO CV Results') %>%
-  kable_classic()
-
-kfoldResults = data.frame("Model" = c(4, 6, 3, 5),
-                        "elpd_diff" = c(0.00, -0.26, -1.15, -2.09),
-                        "se_diff" = c(0.00, 0.48, 4.77, 4.07))
-
-kfoldResults %>% 
-  kbl(align = c('r', 'r'),
-      caption = 'K-Fold CV Results') %>%
-  kable_classic()
-```    
-
 Next, the final fitted model should look like our data.  By drawing from the predictive distribution and comparing it to the distribution of the response variable (Figure 4), we can determine if our model is fitting appropriately.  In the plot below, we see our predictive distribution tracked the response distribution well increasing our confidence in the model.  
-```{r, echo=FALSE, fig.height=5, fig.width=5}
+```{r, echo=FALSE, fig.height=5}
 fit4_rep = posterior_predict(fit4)
 ppc_dens_overlay(data_scale$Price, fit4_rep) + 
   scale_y_continuous(breaks=NULL) +
