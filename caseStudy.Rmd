@@ -44,7 +44,7 @@ data_scale <- cbind(log(data$Price),
 names(data_scale) <- names(data)
 ```
 
-```{r, warning=FALSE, message=FALSE, echo=FALSE}
+```{r, warning=FALSE, message = FALSE, echo=FALSE}
 resultsDF <- data.frame(model = 1:10,
                         predictors = rep(NA, 10),
                         R2 = rep(NA, 10),
@@ -163,7 +163,7 @@ resultsDF <- diagFit(fit10, 10, resultsDF)
 
 # Introduction
 
-Consumers shopping for new cars often have the option to trade in their current car for money towards their new one. Dealerships, in turn, sell the used cars at a slightly higher price. To do this effectively, the dealership must be able to accurately estimate the expected price that it can sell each used car for based only on characteristics of the car. 
+Consumers shopping for new cars often have the option to trade in their current car for money towards their new one. Dealerships, in turn, sell the used cars at a slightly higher price. To do this effectively, the dealership must be able to accurately estimate the expected price that it can sell each used car for based only on characteristics of the car. Specifically, a Toyota dealership was interested in fitting a regression model to estimate `Price` using $16$ different predictor variables and a data set of $694$ used Toyota Corolla sales.  Figure 1 shows the prices of those Corollas and to eliminate the skewness in Price, figure 2 shows the log(price) of those same Corollas.  
 
 ```{r, echo=FALSE}
 plt1 <- ggplot(data,
@@ -181,14 +181,14 @@ plt2 <- ggplot(data_scale,
   geom_histogram(binwidth = .1) +
   theme_tufte(base_family = 'sans') +
   scale_y_continuous(breaks = seq(0, 125, by = 25)) +
-  labs(title = 'Used Toyota Corolla Log Sales Prices',
+  labs(title = 'Used Toyota Corolla Log Sales Prices (Figure 2)',
        x = 'Log Sales Price',
        y = 'Count')
 
 grid.arrange(plt1, plt2)
 ```
 
-A Toyota dealership was interested in fitting a regression model to estimate `Price` (Figure 1) using $16$ different predictor variables and a data set of $694$ used Toyota Corolla sales. Numeric predictors included `Age`, `KM` (odometer reading), `HP` (horsepower), `CC` (cylinder volume), `QuartTax` (quarterly road tax), `Weight` and `Period` (guarantee period). Categorical variables included `Mfg_Month` (manufacturing month), `Mfg_Year` (manufacturing year from 1999-2004), `Fuel_type` (CNG, Diesel, or Petrol), `Metallic`, `Automatic`, `Doors` (3, 4, or 5), `Gears` (5 or 6), `Guarantee` (manufacturer's guarantee), and `BOVAG` (BOVAG guarantee). The `Cylinders` predictor was removed from the original data set because all recorded cars had $4$ cylinders, and all categorical predictors were made into factors in `R`. No other cleaning was performed on the data. 
+Numeric predictors included `Age`, `KM` (odometer reading), `HP` (horsepower), `CC` (cylinder volume), `QuartTax` (quarterly road tax), `Weight` and `Period` (guarantee period). Categorical variables included `Mfg_Month` (manufacturing month), `Mfg_Year` (manufacturing year from 1999-2004), `Fuel_type` (CNG, Diesel, or Petrol), `Metallic`, `Automatic`, `Doors` (3, 4, or 5), `Gears` (5 or 6), `Guarantee` (manufacturer's guarantee), and `BOVAG` (BOVAG guarantee). The `Cylinders` predictor was removed from the original data set because all recorded cars had $4$ cylinders, and all categorical predictors were made into factors in `R`. No other cleaning was performed on the data. 
 
 A set of practical predictors of interest were chosen based on contextual knowledge and exploratory data visualizations to use for model fitting separately of any formal variable selection techniques. Intuitively, older cars (indicated by `Age` and `KM`) should be worth less and larger and more powerful cars (indicated by `Weight` and `HP`, respectively) should be worth more. It was assumed that cars that take different fuel types (`Fuel_Type`) are likely different kinds of cars and would likely vary in price in some way. Finally, `Guarantee`, `BOVAG`, and `Period` are financial-based incentives that should also intuitively lead to a higher car price. Summary statistics (Table 1) and plots (Figure 2) for these predictors of interest are shown below.
 
@@ -219,7 +219,7 @@ data %>%
   theme_tufte(base_size = 8) +
   theme(axis.text.x = element_blank(),
         axis.text.y = element_blank()) + 
-  labs(title = 'Paired Plots and Correlations (Figure 2)',
+  labs(title = 'Paired Plots and Correlations (Figure 3)',
        x = 'Variables Values',
        y = 'Variable Values')
 ```
@@ -264,7 +264,7 @@ resultsDF %>%
   kable_classic()
 ```
 
-For our final model, we decided to use model $4$ (Table 4).  This model is constructed using horse-shoe selected predictors with the scaled data and default priors.  The horseshoe selected predictors include `Age`, `Mfg_Month`, `Mfg_Year`, `KM`, `Fuel_Type`, `HP`, `Metallic`, `QuartTax`, `Weight`, `Guarantee`, `BOVAG`, and `Period`.  Also, using the scaled numeric predictors and a log-transformation of car price to restrict prediction prices to positive values only, this model is able to better predict selling price compared to other models.
+For our final model, we decided to use model $4$ (Table 4).  This model was constructed using horse-shoe selected predictors with scaled data and default priors.  The horseshoe selected predictors include `Age`, `Mfg_Month`, `Mfg_Year`, `KM`, `Fuel_Type`, `HP`, `Metallic`, `QuartTax`, `Weight`, `Guarantee`, `BOVAG`, and `Period`.  Using the scaled numeric predictors and a log-transformation of car price to restrict prediction prices to positive values only, this model was able to better predict selling price compared to other models.  Because the goal of this study was price prediction, our final model needed to have great observed predictive powers.
 
 ```{r warning = FALSE, echo = FALSE}
 data.frame('Estimate' = round(fit4$coefficients, 3),
@@ -275,19 +275,60 @@ data.frame('Estimate' = round(fit4$coefficients, 3),
   kable_classic()
 ```
 
-The intercept coefficient can be interpreted as the expected log(price) of a non-metallic, CNG-fueled car that was manufactured in January of 1999 with no manufacturer or BOVAG guarantee and a value of $0$ for all numeric predictors included in the model.  The coefficients estimates for the numeric predictors can be interpreted as the expected percent difference in predicted car price associated with a one standard deviation increase in the value of the predictor, with all other predictors remaining constant.  Overall, this model had an in-sample Bayesian $R^2$ value of $0.882$ and a leave one out adjusted $R^2$ value of $0.87$.  This confirms our model isn't overfitting while also showing a relatively high $R^2$ value.  ADD SOMETHING ABOUT SIGMA!!!        
+The intercept coefficient can be interpreted as the expected log(price) of a non-metallic, CNG-fueled car that was manufactured in January of 1999 with no manufacturer or BOVAG guarantee and a value of $0$ for all numeric predictors included in the model.  The coefficients estimates for the numeric predictors can be interpreted as the expected percent difference in predicted car price associated with a one standard deviation increase in the value of the predictor, with all other predictors remaining constant.  This model also produced a residual standard deviation of . Overall, this model had an in-sample Bayesian $R^2$ value of $0.881$ and a leave one out adjusted $R^2$ value of $0.87$.  This confirms our model wasn't overfitting while also showing a relatively high $R^2$ value.  Using leave one out cross validation and also k-fold cross validation, we tested each potential model's predictive powers.  The tables below show model $4$ was the third best model using leave one out cross validation and the best using k-fold cross validation and based on model and data inputs, we chose model $4$ as our final model.  
 
-The final fitted model should look like our data.  By drawing from the predictive distribution and comparing it to the distribution of the response variable (Figure 3), we can determine if our model is fitting appropriately.  In the plot below, we see our predictive distribution tracks the response distribution well increasing our confidence in the model.  
-```{r, echo=FALSE}
+```{r echo=FALSE, message=FALSE, warning=FALSE, out.width="50%"}
+loo1 <- loo(fit1, k_threshold = 0.7)
+loo2 <- loo(fit2, k_threshold = 0.7)
+loo3 <- loo(fit3, k_threshold = 0.7)
+loo4 <- loo(fit4, k_threshold = 0.7)
+loo5 <- loo(fit5, k_threshold = 0.7)
+loo6 <- loo(fit6, k_threshold = 0.7)
+loo7 <- loo(fit7, k_threshold = 0.7)
+loo8 <- loo(fit8, k_threshold = 0.7)
+loo9 <- loo(fit9, k_threshold = 0.7)
+loo10 <- loo(fit10, k_threshold = 0.7)
+
+folds = kfold_split_random(K = 10, N = n)
+kcv_3 = kfold(fit3, folds = folds)
+kcv_4 = kfold(fit4, folds = folds)
+kcv_5 = kfold(fit5, folds = folds)
+kcv_6 = kfold(fit6, folds = folds)
+
+l1 = loo_compare(loo1, loo2, loo3, loo4, loo5, loo6, loo7, loo8, loo9, loo10)
+l2 = loo_compare(kcv_3, kcv_4, kcv_5, kcv_6)
+
+looResults = data.frame("Model" = c(6,5,4,3,2,10,7,9,1,8),
+                        "elpd_diff" = c(0.00, -0.46, -1.26, -2.80, -4.71, 
+                                        -35.19, -36.08, -36.83, -16.87, -85.33),
+                        "se_diff" = c(0.00, 5.43, 0.46, 3.75, 5.81, 13.26, 
+                                      15.86, 15.32, 28.10, 23.22))
+looResults %>%
+  kbl(align = c('r', 'r'),
+      caption = 'LOO CV Results') %>%
+  kable_classic()
+
+kfoldResults = data.frame("Model" = c(4, 6, 3, 5),
+                        "elpd_diff" = c(0.00, -0.26, -1.15, -2.09),
+                        "se_diff" = c(0.00, 0.48, 4.77, 4.07))
+
+kfoldResults %>% 
+  kbl(align = c('r', 'r'),
+      caption = 'K-Fold CV Results') %>%
+  kable_classic()
+```    
+
+Next, the final fitted model should look like our data.  By drawing from the predictive distribution and comparing it to the distribution of the response variable (Figure 4), we can determine if our model is fitting appropriately.  In the plot below, we see our predictive distribution tracked the response distribution well increasing our confidence in the model.  
+```{r, echo=FALSE, fig.height=5, fig.width=5}
 fit4_rep = posterior_predict(fit4)
 ppc_dens_overlay(data_scale$Price, fit4_rep) + 
   scale_y_continuous(breaks=NULL) +
-  labs(title = 'Posterior Predictive Distribution (Figure 3)',
+  labs(title = 'Posterior Predictive Distribution (Figure 4)',
        x = 'log(Price)',
        y = 'Density')
 ```
 
-Checking the assumptions of our final model, we find the model includes all the relevant predictors as we chose these using the horseshoe prior and forcing predictors to be highly related with the response. The outcome measure accurately reflects our prediction interest and is generalized to all Toyota Corollas.  Looking at the residual vs fitted values plot (Figure 4), we see there are no patterns and trends within the residuals vs fitted values plot.  Most values are within $2$ standard residuals of $0$ and the values are spread across the $0$ line.  There might be some clumping but nothing big enough to question the model.  There aren't any heavy tails in the QQ-norm plot (Figure 5) and the values closely align with the red line.    
+Checking the assumptions of our final model, we find the model included all the relevant predictors as these were chosen using the horseshoe prior thus forcing predictors to be highly related with the response. The outcome measure accurately reflected our prediction interest and is generalized to all Toyota Corollas.  Looking at the residual vs fitted values plot (Figure 5), we see there are no patterns or trends within the residuals vs fitted values plot.  Most values are within $2$ standard residuals of $0$ and the values are spread across the $0$ line.  There might be some clumping but nothing big enough to question the model.  There aren't any heavy tails in the QQ-norm plot (Figure 6) and the values closely align with the red line.  These positive assumptions increased the validity of the model.     
 
 ```{r fig.show="hold", out.width="50%", echo = FALSE}
 plt_res_fit =ggplot(mapping = aes(x = fit4$fitted.values, y = fit4$residuals)) +
@@ -295,7 +336,7 @@ plt_res_fit =ggplot(mapping = aes(x = fit4$fitted.values, y = fit4$residuals)) +
     geom_hline(yintercept = 0, col = 'red', size = .2) +
     geom_hline(yintercept = 2*sigma(fit4), size = 0.1) +
     geom_hline(yintercept = -2*sigma(fit4), size = 0.1) +
-    labs(title = 'Residuals vs Fitted Values Plot (Figure 4)',
+    labs(title = 'Residuals vs Fitted Values Plot (Figure 5)',
          x = 'Fitted Values',
          y = 'Residuals')
 
@@ -307,7 +348,7 @@ plt_QQ <- ggplot(mapping = aes(x = quants,  y = sort(scale(fit4$residuals)))) +
               slope = 1,
               col = 'red',
               size = .2) +
-  labs(title = 'QQ-Norm Plot (Figure 5)',
+  labs(title = 'QQ-Norm Plot (Figure 6)',
        x = 'Theoretical Quantiles',
        y = 'Sorted Residuals')
 
@@ -315,15 +356,7 @@ plt_res_fit
 plt_QQ
 ```
 
-## Others results (as appropriate)
-Because the goal of this study is prediction, our final model has great observed predictive powers using leave one out cross validation and also k-fold cross validation.  Using .....
-```{r echo = FALSE}
-# Should we have a table(s) of all the r^2 values and loo_comparisons for each model
-# Maybe explain we this specific model was chosen?
-# Maybe this goes after the coefficients are printed?
-```
-
-In all, the purpose of this study was to predict the selling price of used Toyota Corollas and ensure a small profit based on their new purchase and trade-in promotion.  Based on several variables, we were able to fit this model to help the dealership closely estimate the final selling price for their used cars.  With this model, the dealership can now ensure a reasonable profit by plugging in the characteristics of each individual car into this model and output a predicted selling price.  This will result in more accurate selling prices and higher profits for the dealer.       
+In all, the purpose of this study was to predict the selling price of used Toyota Corollas and ensure a small profit based on their new purchase and trade-in promotion.  Based on several variables, we were able to fit this model to help the dealership closely estimate the final selling price for their used cars.  With this model, the dealership can now ensure a reasonable profit by plugging in the characteristics of each individual car and output a predicted selling price.  This will result in more accurate selling prices and higher profits for the dealer.       
 
 
 
