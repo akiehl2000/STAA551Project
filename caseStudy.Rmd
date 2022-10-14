@@ -23,6 +23,7 @@ set.seed(551)
 options(scipen=999)
 ```
 
+
 ```{r, include=FALSE, message=FALSE}
 # read data from .csv file
 data_raw <- read.csv('ToyotaCorollaData.csv')
@@ -76,7 +77,7 @@ diagFit <- function(fit, modelNum, results) {
   return(results)
 }
 
-N <- 5000
+N <- 1000
 
 fit1 <- stan_glm(Price ~ .,
                  data = data,
@@ -275,9 +276,9 @@ data.frame('Estimate' = round(fit4$coefficients, 3),
   kable_classic()
 ```
 
-The intercept coefficient can be interpreted as the expected log(price) of a non-metallic, CNG-fueled car that was manufactured in January of 1999 with no manufacturer or BOVAG guarantee and a value of $0$ for all numeric predictors included in the model.  The coefficients estimates for the numeric predictors can be interpreted as the expected percent difference in predicted car price associated with a one standard deviation increase in the value of the predictor, with all other predictors remaining constant.  This model also produced a residual standard deviation of . Overall, this model had an in-sample Bayesian $R^2$ value of $0.881$ and a leave one out adjusted $R^2$ value of $0.87$.  This confirms our model wasn't overfitting while also showing a relatively high $R^2$ value.  Using leave one out cross validation and also k-fold cross validation, we tested each potential model's predictive powers.  The tables below show model $4$ was the third best model using leave one out cross validation and the best using k-fold cross validation and based on model and data inputs, we chose model $4$ as our final model.  
+The intercept coefficient can be interpreted as the expected log(price) of a non-metallic, CNG-fueled car that was manufactured in January of 1999 with no manufacturer or BOVAG guarantee and a value of $0$ for all numeric predictors included in the model.  The coefficients estimates for the numeric predictors can be interpreted as the expected percent difference in predicted car price associated with a one standard deviation increase in the value of the predictor, with all other predictors remaining constant.  This model also produced a residual standard deviation of . Overall, this model had an in-sample Bayesian $R^2$ value of $0.881$ and a leave one out adjusted $R^2$ value of $0.87$.  This confirms our model wasn't overfitting while also showing a relatively high $R^2$ value.  Using leave one out cross validation and also k-fold cross validation, we tested each potential model's predictive powers.  Model $4$ was the third best model using leave one out cross validation and the best using k-fold cross validation and based on model and data inputs, we chose model $4$ as our final model.  
 
-```{r echo=FALSE, message=FALSE, warning=FALSE, out.width="50%"}
+```{r echo=FALSE, message=FALSE, warning=FALSE, eval = FALSE}
 loo1 <- loo(fit1, k_threshold = 0.7)
 loo2 <- loo(fit2, k_threshold = 0.7)
 loo3 <- loo(fit3, k_threshold = 0.7)
@@ -297,7 +298,10 @@ kcv_6 = kfold(fit6, folds = folds)
 
 l1 = loo_compare(loo1, loo2, loo3, loo4, loo5, loo6, loo7, loo8, loo9, loo10)
 l2 = loo_compare(kcv_3, kcv_4, kcv_5, kcv_6)
+```
 
+
+```{r echo = FALSE, message = FALSE, warning=FALSE}
 looResults = data.frame("Model" = c(6,5,4,3,2,10,7,9,1,8),
                         "elpd_diff" = c(0.00, -0.46, -1.26, -2.80, -4.71, 
                                         -35.19, -36.08, -36.83, -16.87, -85.33),
@@ -359,5 +363,8 @@ plt_QQ
 In all, the purpose of this study was to predict the selling price of used Toyota Corollas and ensure a small profit based on their new purchase and trade-in promotion.  Based on several variables, we were able to fit this model to help the dealership closely estimate the final selling price for their used cars.  With this model, the dealership can now ensure a reasonable profit by plugging in the characteristics of each individual car and output a predicted selling price.  This will result in more accurate selling prices and higher profits for the dealer.       
 
 
+### Appendix 
+```{r, ref.label=knitr::all_labels(),echo=TRUE,eval=FALSE}
+```
 
 
